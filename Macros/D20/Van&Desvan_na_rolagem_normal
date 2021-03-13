@@ -1,0 +1,257 @@
+--Sobre a macro: 
+--Esta macro basicamente te permite rolar vantagem e desvantagem no mesmo comando de suas outras rolagens.
+--Fiz com sono, deve ter bastante coisa errada/que poderia melhorar, mas funciona até que bem.
+--
+--Como usar:
+--Para informar que quer rolar algo com vantagem, utilize dv em vez de d;
+--Para informar que quer rolar algo com desvantagem, utilize dd em vez de d;
+--recomendo nomear o comando pra chamar ela com /roll, por que sim.
+--Exemplo: /roll 2dv20 - 3dd8 + d4 + 5
+--
+--COMO APLICAR NA SUA MESA:
+--[1] - No chat do firecast, digite /macros, na janelinha que vai abrir selecione onde quer criar a macro, 
+--e clique em algum dos botões de "Nova macro"k;
+--[2] - Abaixo de nome coloque o comando que quer usar para chamar a macro;
+--[3] - Depois marque "Macro em Lua;
+--[4] - Após isso é só copiar esse código (ctrl + A), e colar na caixa de texto em baixo. Se quiser,
+--nem precisa copiar as partes comentadas de mim falando asneira (partes comentadas tem -- no início)
+--
+--
+--Um pouco mais sobre a macro:
+--Basicamente eu pego o que o usuário manda, e dou uma arrumada, então eu rolo as vantágens e desvantagens separadas, 
+--e depois presto os resultados como numeros fixos em uma string com os dados normais, e ponho no rolar() do firecast (é o comando /r, só que dentro do macro)
+--
+--Coisas aletórias que você pode ignorar:
+--1 - Os comandos de vantagem e desvantagem rodam sempre com, no mínimo, 2 dados(menos não faz sentido) 
+--e no máximo 10 dados (ele joga um dado por vez, isso demora), qualquer número fora desse range, deve ser jogado pra dentro dele (acho);
+--
+--2 - Pode por quantos espaços quiser depois do comando de rolagem (inclusive nenhum), a macro ignora eles;
+--
+--3 - Quando todos os argumentos são números ou dados especiais, a função rolar() não aceita como argumento,
+--então, o programa da output nos resultados finais com cor e formatação diferentes da função rolar(), e eu não
+--tive saco de ir atrás de fazer ficar igual.
+--
+--4 - pra facilitar a minha vida impedindo inputs que não fazem sentido, eu criei a função "verify_dumness()",
+--que basicamente rejeita qualquer input que não tenha caracteres bem específicos. E essa função faz isso 'excluindo'
+--todos os caracteres indesejados. Assim, caso vá adicionar algum outro dado especial, tem que se atentar a essa função.
+--
+--5 - Se quiser adicionar mais algum dado especial, pode fazer isso na função roll_weird_dice(), boa sorte entendendo o
+--padrão dela
+
+
+
+
+function remove_space(x)
+    local b
+    local y = ''
+    for b=1, string.len(x), 1 do
+        if string.sub(x,b,b) ~= ' ' then
+            y = y .. string.sub(x,b,b)
+        end
+    end
+    return y
+end
+
+function first_signal_add (x)
+    local y = ''
+    if string.sub(x,1,1) ~= '-' and string.sub(x,1,1) ~= '+' then
+        y = y .. '+' .. x
+    else
+        y = x
+    end
+    return y
+end
+
+function to_array(x)
+
+    local array = {}
+    array["dice"] = {}
+    array["signal"] = {}
+
+    local stay = 0
+    local current_dice = 1
+    local current_signal = 1
+    local s = 0
+
+    local n1 = 0
+    local n2 = 0
+
+
+    while stay == 0 do
+
+        if string.sub(x,1,1) == '-' or string.sub(x,1,1) == '+' then
+            array["signal"][current_signal] = string.sub(x,1,1)
+            current_signal = current_signal + 1
+            x = x:sub(2);
+
+        else
+
+            n1 = string.find(x, '+')
+            n2 = string.find(x, '-')
+
+            if n1 ~= nil or n2 ~= nil then
+
+
+                if n1 == nil then n1 = n2 + 1 end
+                if n2 == nil then n2 = n1 + 1 end
+
+                if n1 < n2 then
+                    s = n1
+                else
+                    s = n2
+                end
+                    array["dice"][current_dice] = string.sub(x, 1, s-1)
+                    current_dice = current_dice + 1
+                    x = x:sub(s);
+            else
+                array["dice"][current_dice] = x
+                current_signal = 0
+                current_dice = 0
+                stay = 1
+            end
+        end
+    end
+    return array
+
+end
+
+function roll_weird_dice(x)
+
+    local i = 0
+    local ii
+    local c = 0
+    local cc = 0
+
+    for ii = 1, #x do
+        i = i + 1;
+    end
+
+    local dv_find
+    local dd_find
+
+    local how_many
+    local wich_dice
+
+    local var = 0
+    local var_cache = 0
+
+    for c = 1, i, 1 do
+        dv_find = string.find(x[c], 'dv')
+        if dv_find ~= nil then
+            if (dv_find==1) then
+                how_many = 2
+            else
+                how_many = tonumber(string.sub(x[c], 1, dv_find-1))
+            end
+            if how_many > 10 then how_many=10 end
+            if how_many == 1 then how_many=2 end
+            wich_dice = x[c]:sub(dv_find+2)
+
+            var = 0
+            var_cache = 0
+            for cc = 1, how_many, 1 do
+                var = rolar('d' .. tostring(wich_dice))
+                if var > var_cache then var_cache = var end
+            end
+            x[c] = tostring(var_cache)
+        end
+        dd_find = string.find(x[c], 'dd')
+        if dd_find ~= nil then
+            if (dd_find==1) then
+                how_many = 2
+            else
+                how_many = tonumber(string.sub(x[c], 1, dd_find-1))
+            end
+            if how_many > 10 then how_many=10 end
+            if how_many == 1 then how_many=2 end
+            wich_dice = x[c]:sub(dd_find+2)
+
+            var = 0
+            var_cache = 257
+            for cc = 1, how_many, 1 do
+                var = rolar('d' .. tostring(wich_dice))
+                if var < var_cache then var_cache = var end
+            end
+            x[c] = tostring(var_cache)
+        end
+
+    end
+    return x
+end
+
+function to_roll(x)
+    local i = 0
+    local ii
+    local c = 0
+    local y = ""
+
+    for ii = 1, #x['signal'] do
+        i = i + 1;
+    end
+    for c = 1, i, 1 do
+        y = y .. x["signal"][c] .. x["dice"][c]
+    end
+    return y
+end
+
+function verify_dumness(x)
+    local s = ''
+    local i = 0
+    local ii = 0
+    -- removidos: [espaço], +, -, d, v, 1234567890, \
+    local dum_chars = '!"#$%&' .. "'()*,./:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcefghijklmnopqrstuwxyz{|}~"
+    for i = 1, string.len(x), 1 do
+        if string.find(dum_chars, string.sub(x, i, i)) ~= nil then return true end
+    end
+
+    if string.find(x, 'ddd') ~= nil then return true end
+
+    if string.find(x, 'vv') ~= nil then return true end
+    
+    if string.find(x, 'vd') ~= nil then return true end
+
+    if string.find(x, 'v ') ~= nil then return true end
+
+    if string.find(x, 'd ') ~= nil then return true end
+    
+    if string.find(x, '%+%+') ~= nil then return true end
+    
+    if string.find(x, '%+%-') ~= nil then return true end
+    
+    if string.find(x, '%-%+') ~= nil then return true end
+    
+    if string.find(x, '%-%-') ~= nil then return true end
+
+    return false
+end
+
+
+local inpt = parametro;
+if parametro ~= '' then
+    if verify_dumness(parametro) == false then
+        local inpt_array;
+        enviar('Rolando: ' .. parametro)
+        inpt = remove_space(inpt)
+
+        inpt = first_signal_add(inpt)
+
+        inpt_array = to_array(inpt)
+
+        inpt_array['dice'] = roll_weird_dice(inpt_array['dice'])
+
+        inpt = to_roll(inpt_array)
+
+        if string.find(inpt, 'd') ~=nil then
+            rolar(inpt:sub(2))
+        else
+            inpt = '0' .. inpt
+            inpt = string.gsub(inpt, '+', ' + ')
+            inpt = string.gsub(inpt, '-', ' - ')
+            enviar('Resultado: ' .. inpt:sub(5) .. ' = '.. tostring(assert(load('return ' .. inpt))()))
+        end
+    else
+        enviar('Escreve direito! (caractere não suportado/escreveu errado/retardado)')
+    end
+else
+    enviar('tenta dnv...(parametros vazios)')
+end
